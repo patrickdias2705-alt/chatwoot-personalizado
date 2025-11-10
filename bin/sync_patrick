@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# Script para sincronizar automaticamente com o repositório patrick no GitHub
+# Uso: ./bin/sync_patrick [mensagem do commit]
+
+set -e
+
+# Cores para output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+REMOTE="patrick"
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+echo -e "${BLUE}🔄 Sincronizando com repositório patrick...${NC}"
+
+# Verificar se há mudanças
+if [ -z "$(git status --porcelain)" ]; then
+    echo -e "${YELLOW}⚠️  Nenhuma mudança para commitar${NC}"
+else
+    echo -e "${YELLOW}📝 Mudanças detectadas, fazendo commit...${NC}"
+    
+    # Mensagem do commit
+    if [ -z "$1" ]; then
+        COMMIT_MSG="Update: $(date '+%Y-%m-%d %H:%M:%S')"
+    else
+        COMMIT_MSG="$1"
+    fi
+    
+    # Adicionar todas as mudanças
+    git add -A
+    
+    # Fazer commit
+    git commit -m "$COMMIT_MSG" || {
+        echo -e "${RED}❌ Erro ao fazer commit${NC}"
+        exit 1
+    }
+    
+    echo -e "${GREEN}✅ Commit criado: $COMMIT_MSG${NC}"
+fi
+
+# Verificar se a branch atual existe no remoto
+echo -e "${BLUE}📤 Fazendo push para $REMOTE/$CURRENT_BRANCH...${NC}"
+
+# Fazer push (force se necessário para main/develop)
+if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "develop" ]; then
+    git push $REMOTE $CURRENT_BRANCH --force-with-lease || {
+        echo -e "${RED}❌ Erro ao fazer push${NC}"
+        exit 1
+    }
+else
+    git push $REMOTE $CURRENT_BRANCH || {
+        echo -e "${RED}❌ Erro ao fazer push${NC}"
+        exit 1
+    }
+fi
+
+echo -e "${GREEN}✅ Sincronização concluída!${NC}"
+echo -e "${BLUE}🔗 Repositório: https://github.com/patrickdias2705-alt/chatwoot${NC}"
+

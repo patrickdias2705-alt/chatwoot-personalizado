@@ -1,0 +1,17 @@
+#!/bin/sh
+# Hook opcional para sincronização automática com repositório patrick
+# Para ativar: mv .husky/post-commit-patrick .husky/post-commit
+# Para desativar: rm .husky/post-commit
+
+. "$(dirname "$0")/_/husky.sh"
+
+# Verificar se estamos na branch main ou develop
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "develop" ]; then
+    echo "🔄 Sincronizando automaticamente com repositório patrick..."
+    git push patrick "$BRANCH" --force-with-lease 2>/dev/null || {
+        echo "⚠️  Push automático falhou. Execute manualmente: git push patrick $BRANCH"
+    }
+fi
+

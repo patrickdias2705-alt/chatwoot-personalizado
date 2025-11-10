@@ -1,4 +1,6 @@
 class CreateCaptainTables < ActiveRecord::Migration[7.0]
+  disable_ddl_transaction!
+
   def up
     # Post this migration, the 'vector' extension is mandatory to run the application.
     # If the extension is not installed, the migration will raise an error.
@@ -23,16 +25,24 @@ class CreateCaptainTables < ActiveRecord::Migration[7.0]
 
   def setup_vector_extension
     return if extension_enabled?('vector')
+    @vector_available = false
 
     begin
       enable_extension 'vector'
-    rescue ActiveRecord::StatementInvalid
+      @vector_available = true
+    rescue ActiveRecord::StatementInvalid => e
+      # Em desenvolvimento, permitir pular se a extensão não estiver disponível
+      if Rails.env.development?
+        puts "⚠️  Warning: vector extension not available. Using text instead for development."
+        @vector_available = false
+      else
       raise StandardError, "Failed to enable 'vector' extension. Read more at https://chwt.app/v4/migration"
+      end
     end
   end
 
   def create_assistants
-    create_table :captain_assistants do |t|
+    create_table :captain_assistants, if_not_exists: true do |t|
       t.string :name, null: false
       t.bigint :account_id, null: false
       t.string :description
@@ -40,12 +50,12 @@ class CreateCaptainTables < ActiveRecord::Migration[7.0]
       t.timestamps
     end
 
-    add_index :captain_assistants, :account_id
-    add_index :captain_assistants, [:account_id, :name], unique: true
+    add_index :captain_assistants, :account_id, if_not_exists: true unless index_exists?(:captain_assistants, :account_id)
+    add_index :captain_assistants, [:account_id, :name], unique: true, if_not_exists: true unless index_exists?(:captain_assistants, [:account_id, :name])
   end
 
   def create_documents
-    create_table :captain_documents do |t|
+    create_table :captain_documents, if_not_exists: true do |t|
       t.string :name, null: false
       t.string :external_link, null: false
       t.text :content
@@ -55,16 +65,20 @@ class CreateCaptainTables < ActiveRecord::Migration[7.0]
       t.timestamps
     end
 
-    add_index :captain_documents, :account_id
-    add_index :captain_documents, :assistant_id
-    add_index :captain_documents, [:assistant_id, :external_link], unique: true
+    add_index :captain_documents, :account_id, if_not_exists: true unless index_exists?(:captain_documents, :account_id)
+    add_index :captain_documents, :assistant_id, if_not_exists: true unless index_exists?(:captain_documents, :assistant_id)
+    add_index :captain_documents, [:assistant_id, :external_link], unique: true, if_not_exists: true unless index_exists?(:captain_documents, [:assistant_id, :external_link])
   end
 
   def create_assistant_responses
-    create_table :captain_assistant_responses do |t|
+    create_table :captain_assistant_responses, if_not_exists: true do |t|
       t.string :question, null: false
       t.text :answer, null: false
+      if @vector_available
       t.vector :embedding, limit: 1536
+      else
+        t.text :embedding
+      end
       t.bigint :assistant_id, null: false
       t.bigint :document_id
       t.bigint :account_id, null: false
@@ -72,19 +86,23 @@ class CreateCaptainTables < ActiveRecord::Migration[7.0]
       t.timestamps
     end
 
-    add_index :captain_assistant_responses, :account_id
-    add_index :captain_assistant_responses, :assistant_id
-    add_index :captain_assistant_responses, :document_id
-    add_index :captain_assistant_responses, :embedding, using: :ivfflat, name: 'vector_idx_knowledge_entries_embedding', opclass: :vector_l2_ops
+    add_index :captain_assistant_responses, :account_id, if_not_exists: true unless index_exists?(:captain_assistant_responses, :account_id)
+    add_index :captain_assistant_responses, :assistant_id, if_not_exists: true unless index_exists?(:captain_assistant_responses, :assistant_id)
+    add_index :captain_assistant_responses, :document_id, if_not_exists: true unless index_exists?(:captain_assistant_responses, :document_id)
+    add_index :captain_assistant_responses, :embedding, using: :ivfflat, name: 'vector_idx_knowledge_entries_embedding', opclass: :vector_l2_ops, if_not_exists: true if @vector_available && !index_exists?(:captain_assistant_responses, :embedding, name: 'vector_idx_knowledge_entries_embedding')
   end
 
   def create_old_tables
     create_table :article_embeddings, if_not_exists: true do |t|
       t.bigint :article_id, null: false
       t.text :term, null: false
+      if @vector_available
       t.vector :embedding, limit: 1536
+      else
+        t.text :embedding
+      end
       t.timestamps
     end
-    add_index :article_embeddings, :embedding, if_not_exists: true, using: :ivfflat, opclass: :vector_l2_ops
+    add_index :article_embeddings, :embedding, if_not_exists: true, using: :ivfflat, opclass: :vector_l2_ops if @vector_available
   end
 end
